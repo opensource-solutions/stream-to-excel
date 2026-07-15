@@ -1,60 +1,33 @@
-import CellStyle from './CellStyle.js'
+import { createCellStyle } from './createCellStyle.js'
+import * as constants from './constants.js'
 
-export default function createSourceFromTableElement(tableElement, options = {}) {
+/**
+ * @typedef {import('../types/index.d.ts').Row} Row
+ * @typedef {import('../types/index.d.ts').TableToSourceOptions} TableToSourceOptions
+ * @typedef {import('../types/index.d.ts').WorksheetSource} WorksheetSource
+ */
+
+/**
+ * @param {HTMLTableElement} tableElement 
+ * @param {TableToSourceOptions} [options = {}]
+ * @returns {WorksheetSource}
+ */
+export function createSourceFromTableElement(tableElement, options = {}) {
 
     const { skipEmptyRows = true, author = '' } = options
 
-    const Q = selector => tableElement.querySelectorAll(selector)
+    const sourceRows = [
+        ...Array.from([ tableElement ], (rowElement) => ({ rowElement, cellsSelector: 'caption', skipEmptyRows: true, doComputeExtremes: false, isHeader: true })),
+        ...Array.from(tableElement.querySelectorAll('thead > tr'), (rowElement) => ({ rowElement, cellsSelector: 'th, td', skipEmptyRows, doComputeExtremes: true, isHeader: true })),
+        ...Array.from(tableElement.querySelectorAll('tbody > tr'), (rowElement) => ({ rowElement, cellsSelector: 'td', skipEmptyRows, doComputeExtremes: true, isHeader: false })),
+        ...Array.from(tableElement.querySelectorAll('tfoot > tr'), (rowElement) => ({ rowElement, cellsSelector: 'td', skipEmptyRows, doComputeExtremes: true, isHeader: false })),
+    ]
 
-    const streamRows = (elements, cellsSelector, callback, skipEmptyRows, doComputeExtremes = true) => {
-        for (const rowElement of elements) {
-            const values = []
-            const styles = []
-            rowElement.querySelectorAll(cellsSelector).forEach(cellElement => {
-                const opts = cellElement.dataset
-                const isHidden = opts.xlHidden || false
-                if (isHidden) {
-                    return
-                }
-                const cellStyle = new CellStyle()
-                const type = (/^(numeric|number|num|n)$/i.test(opts.xlType) ? CellStyle.TYPE_NUMERIC : CellStyle.TYPE_STRING)
-                const formatCode = opts.xlFmt
-                cellStyle.setType(type, formatCode)
-                cellStyle.setFont(
-                    opts.xlFont ? opts.xlFont : CellStyle.FONT_NAME_DEFAULT,
-                    opts.xlFontSize ? opts.xlFontSize : CellStyle.FONT_SIZE_DEFAULT,
-                    opts.xlColor,
-                    opts.xlBold ? true : false,
-                    opts.xlItalic ? true : false,
-                    opts.xlUnderline ? true : false,
-                    opts.xlStrikethrough ? true : false
-                )
-                cellStyle.setAlignment(
-                    opts.xlHalign,
-                    opts.xlValign,
-                    opts.xlWrap
-                )
-                cellStyle.setBorderLeft(opts.xlBorderLeft || opts.xlBorder)
-                cellStyle.setBorderRight(opts.xlBorderRight || opts.xlBorder)
-                cellStyle.setBorderTop(opts.xlBorderTop || opts.xlBorder)
-                cellStyle.setBorderBottom(opts.xlBorderBottom || opts.xlBorder)
-                cellStyle.setBorderDiagonal(opts.xlBorderDiagonal)
-                cellStyle.setFill(
-                    opts.xlForegroundColor || opts.xlBackgroundColor
-                        ? CellStyle.FILL_PATTERN_SOLID
-                        : CellStyle.FILL_PATTERN_NONE,
-                    opts.xlBackgroundColor
-                )
-                styles.push(cellStyle)
-                values.push(cellElement.innerText) // type of value must be a string
-            })
-            if (!skipEmptyRows || values.length > 0) {
-                if (callback({ values, styles, doComputeExtremes }))
-                    return false
-            }
-        }
-        return true
-    }
+    /**
+     * @param {string|undefined} x 
+     * @returns {boolean}
+     */
+    const toBoolOrUndefined = x => x === undefined ? undefined : /^(true|yes|on|1)$/i.test(x)
 
     return {
 
@@ -63,28 +36,87 @@ export default function createSourceFromTableElement(tableElement, options = {})
         },
 
         async getFrozenPosition() {
-            const rows = [ ...Q('caption'), ...Q('thead > tr') ]
-            return { x: 0, y: rows.length }
+            const numRows = sourceRows.reduce((result, { isHeader }) => isHeader ? result + 1 : result, 0)
+            return { x: 0, y: numRows }
         },
 
         async getReadableStream() {
-            let canceled = false
+            let rowIndex = 0
+            let isCanceled = false
             return new ReadableStream({
-                start(controller) {
-                    const callback = (rowData) => {
-                        if (!canceled)
-                            controller.enqueue(rowData)
-                        return canceled
+                async pull(controller) {
+                    if (isCanceled) {
+                        controller.close()
+                        return
                     }
-                    streamRows([ tableElement ], 'caption', callback, true, false)
-                        && streamRows(Q('thead > tr'), 'th', callback, skipEmptyRows)
-                        && streamRows(Q('tbody > tr'), 'td', callback, skipEmptyRows)
-                        && streamRows(Q('tfoot > tr'), 'td', callback, skipEmptyRows)
-                    controller.close()
+                    for (;;) {
+                        if (rowIndex >= sourceRows.length) {
+                            controller.close()
+                            return
+                        }
+                        const { rowElement, cellsSelector, skipEmptyRows, doComputeExtremes } = sourceRows[rowIndex ++]
+                        const values = []
+                        const styles = []
+                        const cells = rowElement.querySelectorAll(cellsSelector)
+                        for (let i = 0; i < cells.length; i ++) {
+                            const cellElement = /** @type {HTMLElement} */ (cells[i])
+                            const opts = cellElement.dataset
+                            const isHidden = opts.xlHidden || false
+                            if (isHidden) continue
+                            const cellStyle = createCellStyle({
+                                type: (/^(numeric|number|num|n)$/i.test(opts.xlType)
+                                    ? constants.TYPE_NUMERIC
+                                    : constants.TYPE_STRING),
+                                formatCode: opts.xlFmt,
+                                font: {
+                                    name: opts.xlFont,
+                                    size: opts.xlFontSize ? Number(opts.xlFontSize) : undefined,
+                                    color: opts.xlColor,
+                                    bold: toBoolOrUndefined(opts.xlBold),
+                                    italic: toBoolOrUndefined(opts.xlItalic),
+                                    underline: toBoolOrUndefined(opts.xlUnderline),
+                                    strikethrough: toBoolOrUndefined(opts.xlStrikethrough),
+                                },
+                                alignment: {
+                                    horizontal: opts.xlHalign,
+                                    vertical: opts.xlValign,
+                                    wrapText: toBoolOrUndefined(opts.xlWrap),
+                                },
+                                borderLeft: {
+                                    thickness: opts.xlBorderLeft || opts.xlBorder,
+                                },
+                                borderRight: {
+                                    thickness: opts.xlBorderLeft || opts.xlBorder,
+                                },
+                                borderBottom: {
+                                    thickness: opts.xlBorderLeft || opts.xlBorder,
+                                },
+                                borderTop: {
+                                    thickness: opts.xlBorderLeft || opts.xlBorder,
+                                },
+                                borderDiagonal: {
+                                    thickness: opts.xlBorderDiagonal,
+                                    up: true,
+                                    down: true,
+                                },
+                                fill: {
+                                    pattern: opts.xlBackgroundColor
+                                        ? constants.FILL_PATTERN_SOLID
+                                        : constants.FILL_PATTERN_NONE,
+                                    bgColor: opts.xlBackgroundColor,
+                                }
+                            })
+                            styles.push(cellStyle)
+                            values.push(cellElement.innerText)
+                        }
+                        if (skipEmptyRows && values.length <= 0)
+                            continue
+                        controller.enqueue({ values, styles, doComputeExtremes })
+                        break
+                    }
                 },
-                pull(controller) { },
                 cancel() {
-                    canceled = true
+                    isCanceled = true
                 }
             })
         }

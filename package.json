@@ -1,13 +1,12 @@
 {
     "name": "xlexp",
-    "version": "2.2.0",
-    "author": "h41ku <h41ku.c0de@ya.ru>",
+    "version": "3.0.0",
     "license": "MIT",
     "type": "module",
     "main": "src/index.js",
     "types": "types/index.d.ts",
     "scripts": {
-        "dev": "esbuild src/index.js --outfile=dist/xlexp.min.js --bundle --minify --sourcemap --charset=utf8 --format=esm --watch",
+        "dev": "esbuild src/index.js --outfile=dist/xlexp.min.js --bundle --charset=utf8 --format=esm --watch",
         "build": "esbuild src/index.js --outfile=dist/xlexp.min.js --bundle --minify --sourcemap --charset=utf8 --format=esm"
     },
     "dependencies": {

@@ -1,8 +1,32 @@
 import JSZip from 'jszip'
-import CellStyle from './CellStyle.js'
-import getColumnNameByIndex from './getColumnNameByIndex.js'
+import * as constants from './constants.js'
+import { getColumnNameByIndex } from './getColumnNameByIndex.js'
+import { schedule } from './schedule.js'
 
+/**
+ * @typedef {import('../types/index.d.ts').WorksheetSource} WorksheetSource
+ * @typedef {import('../types/index.d.ts').CellStyle} CellStyle
+ * @typedef {import('../types/index.d.ts').Color} Color
+ * @typedef {{ fontId: number, alignmentId: number, borderId: number, fillId: number, numFormatId: number }} CellStyleIndexed
+ */
+
+/**
+ * 
+ * @param {number} fontId 
+ * @param {number} alignmentId 
+ * @param {number} borderId 
+ * @param {number} fillId 
+ * @param {number} numFormatId 
+ * @returns {CellStyleIndexed}
+ */
 const buildStyle = (fontId, alignmentId, borderId, fillId, numFormatId) => ({ fontId, alignmentId, borderId, fillId, numFormatId })
+
+/**
+ * 
+ * @param {CellStyleIndexed} a 
+ * @param {CellStyleIndexed} b 
+ * @returns 
+ */
 const stylesAreEquals = (a, b) => (
     a.fontId === b.fontId
     && a.alignmentId === b.alignmentId
@@ -11,13 +35,22 @@ const stylesAreEquals = (a, b) => (
     && a.numFormatId === b.numFormatId
 )
 
+/**
+ * @param {unknown} value 
+ * @returns {string}
+ */
 const xmlEscape = value => value.toString()
   .replace(/\&/g, '&amp;')
   .replace(/\</g, '&lt;')
   .replace(/\>/g, '&gt;')
 
+/**
+ * @param {string} value 
+ * @param {CellStyle} style 
+ * @returns {number}
+ */
 const length = (value, style) => {
-  if (style.type === CellStyle.TYPE_STRING)
+  if (style.type === constants.TYPE_STRING)
     return value.length
   const m = style.formatCode.match(/\.(0+)$/)
   const scale = m ? m[1].length + 1 : 0
@@ -27,13 +60,123 @@ const length = (value, style) => {
     + scale
 }
 
-export default async function exportToExcel(source) { // returns Blob
+/**
+ * @param {CellStyle} _a
+ * @param {CellStyle} _b
+ * @returns {boolean}
+ */
+const fontsAreEquals = (_a, _b) => {
+    const a = _a.font
+    const b = _b.font
+    return a.name === b.name
+        && a.size === b.size
+        && a.color === b.color
+        && a.bold === b.bold
+        && a.italic === b.italic
+        && a.underline === b.underline
+        && a.strikethrough === b.strikethrough
+}
+
+/**
+ * @param {CellStyle} _a 
+ * @param {CellStyle} _b
+ * @returns {boolean}
+ */
+const alignmentsAreEquals = (_a, _b) => {
+    const a = _a.alignment
+    const b = _b.alignment
+    return a.horizontal === b.horizontal
+        && a.vertical === b.vertical
+        && a.wrapText === b.wrapText
+}
+
+/**
+ * @param {{thickness: string, color: Color, up?: boolean, down?: boolean}} a
+ * @param {{thickness: string, color: Color, up?: boolean, down?: boolean}} b 
+ * @returns 
+ */
+const _bordersAreEquals = (a, b) => (
+    a.thickness === b.thickness
+        && a.color === b.color
+        && a.up === b.up
+        && a.down === b.down
+)
+
+/**
+ * @param {CellStyle} a 
+ * @param {CellStyle} b
+ * @returns {boolean}
+ */
+const bordersAreEquals = (a, b) => {
+    return _bordersAreEquals(a.borderLeft, b.borderLeft)
+        && _bordersAreEquals(a.borderRight, b.borderRight)
+        && _bordersAreEquals(a.borderTop, b.borderTop)
+        && _bordersAreEquals(a.borderBottom, b.borderBottom)
+        && _bordersAreEquals(a.borderDiagonal, b.borderDiagonal)
+}
+
+/**
+ * @param {CellStyle} _a 
+ * @param {CellStyle} _b
+ * @returns {boolean}
+ */
+const fillsAreEquals = (_a, _b) => {
+    const a = _a.fill
+    const b = _b.fill
+    return a.pattern === b.pattern
+        && a.bgColor === b.bgColor
+}
+
+/**
+ * @param {CellStyle} a 
+ * @param {CellStyle} b
+ * @returns {boolean}
+ */
+const numFormatAreEquals = (a, b) => {
+    return a.formatCode === b.formatCode
+}
+
+/**
+ * @param {CellStyle} a 
+ * @returns {boolean}
+ */
+const hasAlignments = (a) => {
+    return a.alignment.horizontal !== constants.HORIZONTAL_ALIGNMENT_DEFAULT
+        || a.alignment.vertical !== constants.VERTICAL_ALIGNMENT_DEFAULT
+        || a.alignment.wrapText
+}
+
+/**
+ * @param {CellStyle} a 
+ * @returns {boolean}
+ */
+const hasBorders = (a) => {
+    return a.borderLeft.thickness !== constants.BORDER_THICKNESS_NONE
+        || a.borderRight.thickness !== constants.BORDER_THICKNESS_NONE
+        || a.borderTop.thickness !== constants.BORDER_THICKNESS_NONE
+        || a.borderBottom.thickness !== constants.BORDER_THICKNESS_NONE
+        || a.borderDiagonal.thickness !== constants.BORDER_THICKNESS_NONE
+}
+
+/**
+ * @param {CellStyle} a 
+ * @returns {boolean}
+ */
+const hasFills = (a) => {
+    return a.fill.pattern !== constants.FILL_PATTERN_NONE
+        && a.fill.bgColor !== constants.COLOR_DEFAULT
+}
+
+/**
+ * @param {WorksheetSource} source 
+ * @returns {Promise<Blob>}
+ */
+export async function exportToExcel(source) { // TODO use streams for output
 
     const author = await source.getAuthor()
 
-    let count = 0
     let rowNo = 1
-    let result = ''
+    const resultRows = []
     const dimensions = {
         cols: 0,
         rows: 0
@@ -46,44 +189,53 @@ export default async function exportToExcel(source) { // returns Blob
     const fills = []
     const styles = []
     const numFormats = []
-    let strings = []
+    const strings = []
 
+    /**
+     * @param {unknown[]} haystack 
+     * @param {(a: unknown, b: unknown) => boolean} comparator 
+     * @returns {(target: unknown) => number}
+     */
     const getId = (haystack, comparator) => target => {
-        const criteria = typeof comparator === 'function'
-          ? item => comparator(item, target)
-          : item => item[comparator](target)
-        let i = haystack.findIndex(criteria)
+        /**
+         * @param {unknown} item 
+         * @returns {boolean}
+         */
+        const criteria = item => comparator(item, target) // TODO this is slow
+        let i = haystack.findIndex(criteria) // TODO this is very slow
         if (i < 0) {
             i = haystack.push(target) - 1
         }
         return i
     }
 
-    const getFontId = getId(fonts, 'fontsAreEquals')
-    const getAlignmentId = getId(alignments, 'alignmentsAreEquals')
-    const getBorderId = getId(borders, 'bordersAreEquals')
-    const getFillId = getId(fills, 'fillsAreEquals')
-    const getNumFormatId = getId(numFormats, (a, b) => a.formatCode === b.formatCode)
+    const getFontId = getId(fonts, fontsAreEquals)
+    const getAlignmentId = getId(alignments, alignmentsAreEquals)
+    const getBorderId = getId(borders, bordersAreEquals)
+    const getFillId = getId(fills, fillsAreEquals)
+    const getNumFormatId = getId(numFormats, numFormatAreEquals)
     const getStyleId = getId(styles, stylesAreEquals)
     const getStringId = getId(strings, (a, b) => a === b)
 
     const frozenPosition = await source.getFrozenPosition()
     const stream = await source.getReadableStream()
 
-    for await (const { values, styles, doComputeExtremes = true } of stream) {
+    const iterator = stream[Symbol.asyncIterator]()
+
+    const processRow = ({ values, styles, doComputeExtremes = true }) => {
         const row = []
-        let colNo = 0
-        let maxFontSize = null
-        values.forEach((value, i) => {
-            value = typeof value === 'string' ? value : (value === null || value === undefined ? '' : value.toString())
-            const cellStyle = styles[i]
+        let maxFontSize = 0
+        for (let colNo = 0; colNo < values.length; colNo ++) {
+            const cellValue = values[colNo]
+            const cellStyle = styles[colNo]
+            const value = typeof cellValue === 'string' ? cellValue : (cellValue === null || cellValue === undefined ? '' : cellValue.toString())
             const fontId = getFontId(cellStyle)
             const alignmentId = getAlignmentId(cellStyle)
             const borderId = getBorderId(cellStyle)
             const fillId = getFillId(cellStyle)
             const numFormatId = getNumFormatId(cellStyle)
             const styleId = getStyleId(buildStyle(fontId, alignmentId, borderId, fillId, numFormatId))
-            if (cellStyle.type === CellStyle.TYPE_STRING) {
+            if (cellStyle.type === constants.TYPE_STRING) {
               const stringId = getStringId(value)
               row.push(`<c r="${ getColumnNameByIndex(colNo) + rowNo }" s="${ styleId }" t="s"><v>${ stringId }</v></c>`)
             } else {
@@ -95,6 +247,7 @@ export default async function exportToExcel(source) { // returns Blob
             if (doComputeExtremes) {
                 if (columnsExtremes[colNo] === undefined) {
                     columnsExtremes[colNo] = {
+                        width: 0,
                         length: length(value, cellStyle),
                         isStyled: cellStyle.font.bold,
                         maxFontSize: cellStyle.font.size
@@ -110,30 +263,45 @@ export default async function exportToExcel(source) { // returns Blob
                     }
                 }
             }
-            if (maxFontSize === null || maxFontSize < cellStyle.font.size) {
+            if (maxFontSize < cellStyle.font.size) {
                 maxFontSize = cellStyle.font.size
             }
-            colNo ++
-            count ++
-        })
+        }
         if (row.length > 0) {
-            result += `<row r="${ rowNo }" spans="1:${row.length}"${ maxFontSize !== null && maxFontSize !== CellStyle.FONT_SIZE_DEFAULT ? ` ht="${ Math.round((maxFontSize * 15.0) / CellStyle.FONT_SIZE_DEFAULT) }" customHeight="1"` : `` }>\n${ row.join('\n') }\n</row>\n`
+            resultRows.push(`<row r="${ rowNo }" spans="1:${row.length}"${ maxFontSize !== null && maxFontSize !== constants.FONT_SIZE_DEFAULT ? ` ht="${ Math.round((maxFontSize * 15.0) / constants.FONT_SIZE_DEFAULT) }" customHeight="1"` : `` }>\n${ row.join('\n') }\n</row>`)
         }
         rowNo ++
         dimensions.rows ++
     }
 
+    let finishProcessing
+    const processing = new Promise((resolve) => { finishProcessing = resolve })
+
+    /**
+     * @param {IdleDeadline} deadline 
+     */
+    const task = async (deadline) => {
+      while (deadline.timeRemaining() > 1) {
+        const { value, done } = await iterator.next()
+        if (done) {
+          finishProcessing()
+          return
+        }
+        processRow(value)
+      }
+      schedule(task)
+    }
+
+    schedule(task)
+
+    await processing
+
     columnsExtremes.forEach(col => {
         col.width = (col.length + 2)
           * (col.isStyled ? 1.1 : 1)
-          * (col.maxFontSize / CellStyle.FONT_SIZE_DEFAULT)
+          * (col.maxFontSize / constants.FONT_SIZE_DEFAULT)
     })
     
-    strings = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
-    + `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ count }" uniqueCount="${ strings.length }">\n`
-    + strings.map(value => `<si><t>${ xmlEscape(value) }</t></si>`).join('\n')
-    + '\n</sst>'
-
     const root = new JSZip()
 
     const _rels = root.folder('_rels')
@@ -552,7 +720,7 @@ export default async function exportToExcel(source) { // returns Blob
         ${ item.font.underline ? `<u val="single" />` : ``}
         ${ item.font.strikethrough ? `<strike val="true" />` : ``}
         <sz val="${ item.font.size }" />
-        <color ${ item.font.color === CellStyle.COLOR_DEFAULT ? `theme="1"` : `rgb="${item.font.color}"` } />
+        <color ${ item.font.color === constants.COLOR_DEFAULT ? `theme="1"` : `rgb="${item.font.color}"` } />
         <name val="${ item.font.name }" />
         <family val="2" />
         <charset val="204" />
@@ -564,32 +732,32 @@ export default async function exportToExcel(source) { // returns Blob
     ${ fills.map(item => `
       <fill>
         <patternFill patternType="${ item.fill.pattern }">
-          ${ item.fill.pattern === CellStyle.FILL_PATTERN_SOLID && item.fill.bgColor !== CellStyle.COLOR_DEFAULT ? `<fgColor rgb="${ item.fill.bgColor }"/>` : ``}
-          ${ item.fill.pattern === CellStyle.FILL_PATTERN_SOLID && item.fill.bgColor !== CellStyle.COLOR_DEFAULT ? `<bgColor rgb="${ item.fill.bgColor }"/>` : ``}
+          ${ item.fill.pattern === constants.FILL_PATTERN_SOLID && item.fill.bgColor !== constants.COLOR_DEFAULT ? `<fgColor rgb="${ item.fill.bgColor }"/>` : ``}
+          ${ item.fill.pattern === constants.FILL_PATTERN_SOLID && item.fill.bgColor !== constants.COLOR_DEFAULT ? `<bgColor rgb="${ item.fill.bgColor }"/>` : ``}
         </patternFill>
       </fill>
     `).join('\n') }
   </fills>
   <borders count="${ borders.length }">
     ${ borders.map(item => `
-       <border${ item.borderDiagonal.thickness !== CellStyle.BORDER_THICKNESS_NONE
+       <border${ item.borderDiagonal.thickness !== constants.BORDER_THICKNESS_NONE
           ? ` diagonalUp="${ item.borderDiagonal.up ? `true` : `false` }" diagonalDown="${ item.borderDiagonal.down ? `true` : `false` }"`
           : ``
         }>
-          <left${ item.borderLeft.thickness !== CellStyle.BORDER_THICKNESS_NONE ? ` style="${ item.borderLeft.thickness }"` : `` }>
-             ${ item.borderLeft.thickness !== CellStyle.BORDER_THICKNESS_NONE ? (item.borderLeft.color !== CellStyle.COLOR_DEFAULT ? `<color indexed="${ item.borderLeft.color }"/>` : ``) : `` }
+          <left${ item.borderLeft.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderLeft.thickness }"` : `` }>
+             ${ item.borderLeft.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderLeft.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderLeft.color }"/>` : ``) : `` }
           </left>
-          <right${ item.borderRight.thickness !== CellStyle.BORDER_THICKNESS_NONE ? ` style="${ item.borderRight.thickness }"` : `` }>
-             ${ item.borderRight.thickness !== CellStyle.BORDER_THICKNESS_NONE ? (item.borderRight.color !== CellStyle.COLOR_DEFAULT ? `<color indexed="${ item.borderRight.color }"/>` : ``) : `` }
+          <right${ item.borderRight.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderRight.thickness }"` : `` }>
+             ${ item.borderRight.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderRight.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderRight.color }"/>` : ``) : `` }
           </right>
-          <top${ item.borderTop.thickness !== CellStyle.BORDER_THICKNESS_NONE ? ` style="${ item.borderTop.thickness }"` : `` }>
-             ${ item.borderTop.thickness !== CellStyle.BORDER_THICKNESS_NONE ? (item.borderTop.color !== CellStyle.COLOR_DEFAULT ? `<color indexed="${ item.borderTop.color }"/>` : ``) : `` }
+          <top${ item.borderTop.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderTop.thickness }"` : `` }>
+             ${ item.borderTop.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderTop.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderTop.color }"/>` : ``) : `` }
           </top>
-          <bottom${ item.borderBottom.thickness !== CellStyle.BORDER_THICKNESS_NONE ? ` style="${ item.borderBottom.thickness }"` : `` }>
-             ${ item.borderBottom.thickness !== CellStyle.BORDER_THICKNESS_NONE ? (item.borderBottom.color !== CellStyle.COLOR_DEFAULT ? `<color indexed="${ item.borderBottom.color }"/>` : ``) : `` }
+          <bottom${ item.borderBottom.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderBottom.thickness }"` : `` }>
+             ${ item.borderBottom.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderBottom.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderBottom.color }"/>` : ``) : `` }
           </bottom>
-          <diagonal${ item.borderDiagonal.thickness !== CellStyle.BORDER_THICKNESS_NONE ? ` style="${ item.borderDiagonal.thickness }"` : `` }>
-             ${ item.borderDiagonal.thickness !== CellStyle.BORDER_THICKNESS_NONE ? (item.borderDiagonal.color !== CellStyle.COLOR_DEFAULT ? `<color indexed="${ item.borderDiagonal.color }"/>` : ``) : `` }
+          <diagonal${ item.borderDiagonal.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderDiagonal.thickness }"` : `` }>
+             ${ item.borderDiagonal.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderDiagonal.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderDiagonal.color }"/>` : ``) : `` }
           </diagonal>
        </border>
     `).join('\n') }
@@ -604,8 +772,8 @@ export default async function exportToExcel(source) { // returns Blob
       const border = borders[item.borderId]
       const fill = fills[item.fillId]
       return `
-      <xf numFmtId="${ item.numFormatId }" fontId="${ item.fontId }" fillId="${ item.fillId }" borderId="${ item.borderId }" xfId="0" applyNumberFormat="1" applyFont="1"${ alignment.hasAlignments() ? ` applyAlignment="1"` : `` }${ border.hasBorders() ? ` applyBorder="1"` : `` }${ fill.hasFills() ? ` applyFill="1"` : `` }>
-        ${ alignment.hasAlignments() ? `<alignment${ alignment.alignment.horizontal !== CellStyle.HORIZONTAL_ALIGNMENT_DEFAULT ? ` horizontal="${ alignment.alignment.horizontal }"` : `` }${ alignment.alignment.vertical !== CellStyle.VERTICAL_ALIGNMENT_DEFAULT ? ` vertical="${ alignment.alignment.vertical }"` : `` }${ alignment.alignment.wrapText ? ` wrapText="1"` : `` } />` : `` }
+      <xf numFmtId="${ item.numFormatId }" fontId="${ item.fontId }" fillId="${ item.fillId }" borderId="${ item.borderId }" xfId="0" applyNumberFormat="1" applyFont="1"${ hasAlignments(alignment) ? ` applyAlignment="1"` : `` }${ hasBorders(border) ? ` applyBorder="1"` : `` }${ hasFills(fill) ? ` applyFill="1"` : `` }>
+        ${ hasAlignments(alignment) ? `<alignment${ alignment.alignment.horizontal !== constants.HORIZONTAL_ALIGNMENT_DEFAULT ? ` horizontal="${ alignment.alignment.horizontal }"` : `` }${ alignment.alignment.vertical !== constants.VERTICAL_ALIGNMENT_DEFAULT ? ` vertical="${ alignment.alignment.vertical }"` : `` }${ alignment.alignment.wrapText ? ` wrapText="1"` : `` } />` : `` }
       </xf>
       `
      }).join('\n') }
@@ -617,7 +785,10 @@ export default async function exportToExcel(source) { // returns Blob
   <tableStyles count="0" defaultTableStyle="TableStyleMedium9" defaultPivotStyle="PivotStyleMedium4" />
 </styleSheet>`)
 
-    xl.file('sharedStrings.xml', strings)
+    xl.file('sharedStrings.xml', `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+${ strings.map(value => `<si><t>${ xmlEscape(value) }</t></si>`).join('\n') }
+</sst>`)
 
     xl_worksheets.file('sheet1.xml', `<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -633,7 +804,7 @@ export default async function exportToExcel(source) { // returns Blob
     ${ columnsExtremes.map((col, i) => `<col min="${ i + 1 }" max="${ i + 1 }" width="${ col.width }" customWidth="1" />`).join('\n') }
   </cols>
   <sheetData>
-    ${ result }
+    ${ resultRows.join('\n') }
   </sheetData>
   <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3" />
 </worksheet>`)

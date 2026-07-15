@@ -1,27 +1,99 @@
-export type Color = number;
+export type Color = number | string;
 export type HorizontalAlignment = string;
 export type VerticalAlignment = string;
 export type BorderThickness = string;
 export type FillPattern = string;
 
-export interface CellStyle {
-    setFont(name: string, size: number, color: Color | null, bold: boolean, italic: boolean, underline: boolean, strikethrough: boolean): void;
-    setAlignment(horizontal: HorizontalAlignment, vertical: VerticalAlignment, wrapText: boolean): void;
-    setBorderLeft(thickness: BorderThickness | null, color?: Color): void;
-    setBorderRight(thickness: BorderThickness | null, color?: Color): void;
-    setBorderTop(thickness: BorderThickness | null, color?: Color): void;
-    setBorderBottom(thickness: BorderThickness | null, color?: Color): void;
-    setBorderDiagonal(thickness: BorderThickness | null, color?: Color): void;
-    setFill(pattern?: FillPattern, bgColor?: Color): void;
-    setType(type?: string, formatCode?: string): void;
-    fontsAreEquals(cellStyle: CellStyle): boolean;
-    alignmentsAreEquals(cellStyle: CellStyle): boolean;
-    bordersAreEquals(cellStyle: CellStyle): boolean;
-    fillsAreEquals(cellStyle: CellStyle): boolean;
-    hasAlignments(): boolean;
-    hasBorders(): boolean;
-    hasFills(): boolean;
-    clone(): CellStyle;
+export type CellValue = string | number | bigint | null | undefined;
+
+export type CellStyle = {
+    type: string,
+    formatCode: string,
+    font: {
+        name: string,
+        size: number,
+        color: Color | null,
+        bold: boolean,
+        italic: boolean,
+        underline: boolean,
+        strikethrough: boolean,
+    },
+    alignment: {
+        horizontal: HorizontalAlignment | null,
+        vertical: VerticalAlignment | null,
+        wrapText: boolean
+    },
+    borderLeft: {
+        thickness: BorderThickness,
+        color: Color | null
+    },
+    borderRight: {
+        thickness: BorderThickness,
+        color: Color | null
+    },
+    borderTop: {
+        thickness: BorderThickness,
+        color: Color | null
+    },
+    borderBottom: {
+        thickness: BorderThickness,
+        color: Color | null
+    },
+    borderDiagonal: {
+        thickness: BorderThickness,
+        color: Color | null,
+        up: boolean,
+        down: boolean
+    },
+    fill: {
+        pattern: string,
+        bgColor: Color | null
+    }
+};
+
+export type CellStyleOptions = {
+    type?: string,
+    formatCode?: string,
+    font?: {
+        name?: string,
+        size?: number,
+        color?: Color | null,
+        bold?: boolean,
+        italic?: boolean,
+        underline?: boolean,
+        strikethrough?: boolean,
+    },
+    alignment?: {
+        horizontal?: HorizontalAlignment | null,
+        vertical?: VerticalAlignment | null,
+        wrapText?: boolean
+    },
+    borderLeft?: {
+        thickness?: BorderThickness,
+        color?: Color | null
+    },
+    borderRight?: {
+        thickness?: BorderThickness,
+        color?: Color | null
+    },
+    borderTop?: {
+        thickness?: BorderThickness,
+        color?: Color | null
+    },
+    borderBottom?: {
+        thickness?: BorderThickness,
+        color?: Color | null
+    },
+    borderDiagonal?: {
+        thickness?: BorderThickness,
+        color?: Color | null,
+        up?: boolean,
+        down?: boolean
+    },
+    fill?: {
+        pattern?: string,
+        bgColor?: Color | null
+    }
 };
 
 export type Position = {
@@ -30,8 +102,8 @@ export type Position = {
 };
 
 export type Row = {
-    values: Array<string>,
-    styles: Array<CellStyle>,
+    values: CellValue[],
+    styles: CellStyle[],
     doComputeExtremes?: boolean
 };
 
@@ -46,6 +118,8 @@ export type TableToSourceOptions = {
     skipEmptyRows?: boolean
 };
 
+export declare function createCellStyle(options: CellStyleOptions = {}): CellStyle;
+export declare function cloneCellStyle(cellStyle: CellStyle, options: CellStyleOptions = {}): CellStyle;
 export declare function getColumnNameByIndex(n: number): string;
-export declare function createSourceFromTableElement(tableElement: Element, options?: TableToSourceOptions): Streamer;
+export declare function createSourceFromTableElement(tableElement: HTMLTableElement, options?: TableToSourceOptions): WorksheetSource;
 export declare function exportToExcel(source: WorksheetSource): Promise<Blob>;

@@ -1,135 +1,5 @@
-# xlexp
-
-Библиотека для выгрузки табличных данных в Excel (xlsx) файл.
-
-## Возможности
-
-- Использование как во frontend так и в backend
-- Выгрузка данных в формате xlsx
-- Закрепление указанной области
-- Возможность указать автора
-- Установка размера и стиля шрифта
-- Установка стилей границ ячеек
-- Установка формата значений ячеек
-- Установка цвета текста и фона ячеек
-- Использование `Web Streams API` для работы с асинхронными потоками данных
-- Поддержание отзывчивости приложения за счет разделения на подзадачи
-- Использование HTML-таблиц в качестве потоков данных
-
-## Пример использования
-
-Выгрузка таблицы:
-
-```html
-<table>
-    ...
-</table>
-```
-
-Создайте источник, используя DOM-элемент, и выгрузите данные:
-
-
-```js
-import { exportToExcel, createSourceFromTableElement } from 'xlexp'
-import passIt from 'pass-it'
-
-const tableElement = document.querySelector('table')
-const buttonElement = document.querySelector('button.export')
-
-buttonElement.addEventListener('click', async () => {
-    buttonElement.setAttribute('disabled', true)
-    const blob = await exportToExcel(
-        createSourceFromTableElement(tableElement)
-    )
-    passIt(blob, { download: "Пример выгрузки.xlsx" })
-    buttonElement.removeAttribute('disabled')
-})
-```
-
-Вы можете создавать источники с помощью своей функции, возвращающей объект,
-соответствующий интерфейсу `WorksheetSource`:
-
-```ts
-export interface WorksheetSource {
-    getAuthor(): Promise<string>;
-    getFrozenPosition(): Promise<Position>;
-    getReadableStream(): Promise<ReadableStream<Row>>;
-};
-```
-
-Базовые типы данных:
-
-```ts
-export type Color = number | string;
-export type HorizontalAlignment = string;
-export type VerticalAlignment = string;
-export type BorderThickness = string;
-export type FillPattern = string;
-
-export type CellValue = string | number | bigint | null | undefined;
-
-export type CellStyle = {
-    type: string,
-    formatCode: string,
-    font: {
-        name: string,
-        size: number,
-        color: Color | null,
-        bold: boolean,
-        italic: boolean,
-        underline: boolean,
-        strikethrough: boolean,
-    },
-    alignment: {
-        horizontal: HorizontalAlignment | null,
-        vertical: VerticalAlignment | null,
-        wrapText: boolean
-    },
-    borderLeft: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderRight: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderTop: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderBottom: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderDiagonal: {
-        thickness: BorderThickness,
-        color: Color | null,
-        up: boolean,
-        down: boolean
-    },
-    fill: {
-        pattern: string,
-        bgColor: Color | null
-    }
-};
-
-export type Position = {
-    x: number,
-    y: number
-};
-
-export type Row = {
-    values: CellValue[],
-    styles: CellStyle[],
-    doComputeExtremes?: boolean
-};
-```
-
-Пример источника:
-
-```js
-import { createCellStyle, cloneCellStyle, exportToExcel,
-    BORDER_THICKNESS_THIN, TYPE_NUMERIC, HORIZONTAL_ALIGNMENT_RIGHT } from "xlexp"
+import { writeFileSync } from 'fs'
+import { createCellStyle, cloneCellStyle, exportToExcel, BORDER_THICKNESS_THIN, TYPE_NUMERIC, HORIZONTAL_ALIGNMENT_RIGHT } from "../dist/xlexp.min.js"
 
 const createExampleSource = () => ({
     async getAuthor() {
@@ -233,4 +103,12 @@ const createExampleSource = () => ({
         })
     }
 })
-```
+
+exportToExcel(createExampleSource())
+    .then(async (blob) => {
+        writeFileSync('./output.xlsx', Buffer.from(await blob.arrayBuffer()))
+    })
+    .catch(error => {
+        console.error(error)
+        globalThis.process.exit(1)
+    })

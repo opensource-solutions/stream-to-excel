@@ -1,13 +1,6 @@
-import CellStyle from './CellStyle.js'
-import createSourceFromTableElement from './createSourceFromTableElement.js'
-import getColumnNameByIndex from './getColumnNameByIndex.js'
-import exportToExcel from './exportToExcel.js'
-
-export {
-
-    CellStyle,
-
-    getColumnNameByIndex,
-    createSourceFromTableElement,
-    exportToExcel
-}
+export * from './constants.js'
+export { createSourceFromTableElement } from './createSourceFromTableElement.js'
+export { getColumnNameByIndex } from './getColumnNameByIndex.js'
+export { exportToExcel } from './exportToExcel.js'
+export { createCellStyle } from './createCellStyle.js'
+export { cloneCellStyle } from './cloneCellStyle.js'
