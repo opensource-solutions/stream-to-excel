@@ -1,13 +1,13 @@
 {
-    "name": "xlexp",
-    "version": "3.0.0",
+    "name": "stream-to-excel",
+    "version": "1.0.0",
     "license": "MIT",
     "type": "module",
     "main": "src/index.js",
     "types": "types/index.d.ts",
     "scripts": {
-        "dev": "esbuild src/index.js --outfile=dist/xlexp.min.js --bundle --charset=utf8 --format=esm --watch",
-        "build": "esbuild src/index.js --outfile=dist/xlexp.min.js --bundle --minify --sourcemap --charset=utf8 --format=esm"
+        "dev": "esbuild src/index.js --outfile=dist/stream-to-excel.min.js --bundle --charset=utf8 --format=esm --watch",
+        "build": "esbuild src/index.js --outfile=dist/stream-to-excel.min.js --bundle --minify --sourcemap --charset=utf8 --format=esm"
     },
     "dependencies": {
         "jszip": "^3.10.1"

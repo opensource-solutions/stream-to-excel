@@ -4,7 +4,8 @@ import { getColumnNameByIndex } from './getColumnNameByIndex.js'
 import { schedule } from './schedule.js'
 
 /**
- * @typedef {import('../types/index.d.ts').WorksheetSource} WorksheetSource
+ * @typedef {import('../types/index.d.ts').SheetOptions} SheetOptions
+ * @typedef {import('../types/index.d.ts').Row} Row
  * @typedef {import('../types/index.d.ts').CellStyle} CellStyle
  * @typedef {import('../types/index.d.ts').Color} Color
  * @typedef {{ fontId: number, alignmentId: number, borderId: number, fillId: number, numFormatId: number }} CellStyleIndexed
@@ -168,12 +169,15 @@ const hasFills = (a) => {
 }
 
 /**
- * @param {WorksheetSource} source 
+ * @param {ReadableStream<Row>} stream
+ * @param {SheetOptions} [options = {}]
  * @returns {Promise<Blob>}
  */
-export async function exportToExcel(source) { // TODO use streams for output
+export async function streamToExcel(stream, options = {}) { // TODO use streams for output
 
-    const author = await source.getAuthor()
+    const opts = { author: '', frozenPosition: { x: 0, y: 0, ...(options.frozenPosition || {}) }, ...options }
+
+    const { author, frozenPosition } = opts
 
     let rowNo = 1
     const resultRows = []
@@ -216,9 +220,6 @@ export async function exportToExcel(source) { // TODO use streams for output
     const getNumFormatId = getId(numFormats, numFormatAreEquals)
     const getStyleId = getId(styles, stylesAreEquals)
     const getStringId = getId(strings, (a, b) => a === b)
-
-    const frozenPosition = await source.getFrozenPosition()
-    const stream = await source.getReadableStream()
 
     const iterator = stream[Symbol.asyncIterator]()
 

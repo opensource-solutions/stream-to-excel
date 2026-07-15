@@ -107,19 +107,12 @@ export type Row = {
     doComputeExtremes?: boolean
 };
 
-export interface WorksheetSource {
-    getAuthor(): Promise<string>;
-    getFrozenPosition(): Promise<Position>;
-    getReadableStream(): Promise<ReadableStream<Row>>;
-};
-
-export type TableToSourceOptions = {
+export type SheetOptions = {
     author?: string,
-    skipEmptyRows?: boolean
+    frozenPosition?: Position,
 };
 
 export declare function createCellStyle(options: CellStyleOptions = {}): CellStyle;
 export declare function cloneCellStyle(cellStyle: CellStyle, options: CellStyleOptions = {}): CellStyle;
 export declare function getColumnNameByIndex(n: number): string;
-export declare function createSourceFromTableElement(tableElement: HTMLTableElement, options?: TableToSourceOptions): WorksheetSource;
-export declare function exportToExcel(source: WorksheetSource): Promise<Blob>;
+export declare function streamToExcel(stream: ReadableStream<Row>, options?: SheetOptions): Promise<Blob>;

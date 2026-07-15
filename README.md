@@ -1,6 +1,6 @@
-# xlexp
+# stream-to-excel
 
-Библиотека для выгрузки табличных данных в Excel (xlsx) файл.
+Библиотека для выгрузки данных в Excel
 
 ## Возможности
 
@@ -18,219 +18,116 @@
 
 ## Пример использования
 
-Выгрузка таблицы:
-
-```html
-<table>
-    ...
-</table>
-```
-
-Создайте источник, используя DOM-элемент, и выгрузите данные:
-
-
 ```js
-import { exportToExcel, createSourceFromTableElement } from 'xlexp'
-import passIt from 'pass-it'
+import { writeFileSync } from 'fs'
+import {
+    createCellStyle,
+    cloneCellStyle,
+    streamToExcel,
+    BORDER_THICKNESS_THIN, TYPE_NUMERIC, HORIZONTAL_ALIGNMENT_RIGHT
+} from 'stream-to-excel'
 
-const tableElement = document.querySelector('table')
-const buttonElement = document.querySelector('button.export')
-
-buttonElement.addEventListener('click', async () => {
-    buttonElement.setAttribute('disabled', true)
-    const blob = await exportToExcel(
-        createSourceFromTableElement(tableElement)
-    )
-    passIt(blob, { download: "Пример выгрузки.xlsx" })
-    buttonElement.removeAttribute('disabled')
-})
-```
-
-Вы можете создавать источники с помощью своей функции, возвращающей объект,
-соответствующий интерфейсу `WorksheetSource`:
-
-```ts
-export interface WorksheetSource {
-    getAuthor(): Promise<string>;
-    getFrozenPosition(): Promise<Position>;
-    getReadableStream(): Promise<ReadableStream<Row>>;
-};
-```
-
-Базовые типы данных:
-
-```ts
-export type Color = number | string;
-export type HorizontalAlignment = string;
-export type VerticalAlignment = string;
-export type BorderThickness = string;
-export type FillPattern = string;
-
-export type CellValue = string | number | bigint | null | undefined;
-
-export type CellStyle = {
-    type: string,
-    formatCode: string,
-    font: {
-        name: string,
-        size: number,
-        color: Color | null,
-        bold: boolean,
-        italic: boolean,
-        underline: boolean,
-        strikethrough: boolean,
-    },
-    alignment: {
-        horizontal: HorizontalAlignment | null,
-        vertical: VerticalAlignment | null,
-        wrapText: boolean
-    },
-    borderLeft: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderRight: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderTop: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderBottom: {
-        thickness: BorderThickness,
-        color: Color | null
-    },
-    borderDiagonal: {
-        thickness: BorderThickness,
-        color: Color | null,
-        up: boolean,
-        down: boolean
-    },
-    fill: {
-        pattern: string,
-        bgColor: Color | null
-    }
-};
-
-export type Position = {
-    x: number,
-    y: number
-};
-
-export type Row = {
-    values: CellValue[],
-    styles: CellStyle[],
-    doComputeExtremes?: boolean
-};
-```
-
-Пример источника:
-
-```js
-import { createCellStyle, cloneCellStyle, exportToExcel,
-    BORDER_THICKNESS_THIN, TYPE_NUMERIC, HORIZONTAL_ALIGNMENT_RIGHT } from "xlexp"
-
-const createExampleSource = () => ({
-    async getAuthor() {
-        return 'Example'
-    },
-    async getFrozenPosition() {
-        return { x: 0, y: 2 }
-    },
-    async getReadableStream() {
-        let isCanceled = false
-        let numRows = 10
-        const status = ['Нет связи','Готов','Выполняется']
-        const style = createCellStyle({
-            borderLeft: { thickness: BORDER_THICKNESS_THIN },
-            borderRight: { thickness: BORDER_THICKNESS_THIN },
-            borderBottom: { thickness: BORDER_THICKNESS_THIN },
-            borderTop: { thickness: BORDER_THICKNESS_THIN },
-        })
-        const totals = [ 0, 0, 0 ]
-        return new ReadableStream({
-            start(controller) {
-                controller.enqueue({
-                    values: [
-                        'Какие-то интересные данные для примера'
-                    ],
-                    styles: [
-                        createCellStyle()
-                    ]
-                })
-                controller.enqueue({
-                    values: [
-                        'Идентификатор',
-                        'IP-адрес',
-                        'Статус',
-                        'Вх.трафик',
-                        'Исх.трафик',
-                        'Заданий',
-                    ],
-                    styles: [
-                        cloneCellStyle(style, { font: { bold: true }, }),
-                        cloneCellStyle(style, { font: { bold: true }, }),
-                        cloneCellStyle(style, { font: { bold: true }, }),
-                        cloneCellStyle(style, { font: { bold: true }, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                        cloneCellStyle(style, { font: { bold: true }, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                        cloneCellStyle(style, { font: { bold: true }, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                    ]
-                })
-            },
-            pull(controller) {
-                if (isCanceled || numRows <= 0) {
-                    if (!isCanceled) {
-                        controller.enqueue({
-                            values: [
-                                'Итого',
-                                '',
-                                '',
-                                totals[0],
-                                totals[1],
-                                totals[2],
-                            ],
-                            styles: [
-                                cloneCellStyle(style),
-                                cloneCellStyle(style),
-                                cloneCellStyle(style),
-                                cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                                cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                                cloneCellStyle(style, { type: TYPE_NUMERIC, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                            ]
-                        })
-                    }
-                    controller.close()
-                    return
-                }
-                const values = [
-                    crypto.randomUUID(),
-                    `192.168.37.${Math.floor(Math.random() * 200) + 10}`,
-                    status.at(Math.floor(Math.random() * status.length)),
-                    Math.floor(Math.random() * 5000000),
-                    Math.floor(Math.random() * 200000),
-                    Math.floor(Math.random() * 20),
+const createExampleStream = () => {
+    let isCanceled = false
+    let numRows = 10
+    const status = ['Нет связи','Готов','Выполняется']
+    const style = createCellStyle({
+        borderLeft: { thickness: BORDER_THICKNESS_THIN },
+        borderRight: { thickness: BORDER_THICKNESS_THIN },
+        borderBottom: { thickness: BORDER_THICKNESS_THIN },
+        borderTop: { thickness: BORDER_THICKNESS_THIN },
+    })
+    const totals = [ 0, 0, 0 ]
+    return new ReadableStream({
+        start(controller) {
+            controller.enqueue({
+                values: [
+                    'Какие-то интересные данные для примера'
+                ],
+                styles: [
+                    createCellStyle()
                 ]
-                totals[0] += /** @type {number} */ (values[3])
-                totals[1] += /** @type {number} */ (values[4])
-                totals[2] += /** @type {number} */ (values[5])
-                controller.enqueue({
-                    values,
-                    styles: [
-                        cloneCellStyle(style),
-                        cloneCellStyle(style),
-                        cloneCellStyle(style),
-                        cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                        cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                        cloneCellStyle(style, { type: TYPE_NUMERIC, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
-                    ]
-                })
-                numRows --
-            },
-            cancel() {
-                isCanceled = true
+            })
+            controller.enqueue({
+                values: [
+                    'Идентификатор',
+                    'IP-адрес',
+                    'Статус',
+                    'Вх.трафик',
+                    'Исх.трафик',
+                    'Заданий',
+                ],
+                styles: [
+                    cloneCellStyle(style, { font: { bold: true }, }),
+                    cloneCellStyle(style, { font: { bold: true }, }),
+                    cloneCellStyle(style, { font: { bold: true }, }),
+                    cloneCellStyle(style, { font: { bold: true }, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                    cloneCellStyle(style, { font: { bold: true }, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                    cloneCellStyle(style, { font: { bold: true }, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                ]
+            })
+        },
+        pull(controller) {
+            if (isCanceled || numRows <= 0) {
+                if (!isCanceled) {
+                    controller.enqueue({
+                        values: [
+                            'Итого',
+                            '',
+                            '',
+                            totals[0],
+                            totals[1],
+                            totals[2],
+                        ],
+                        styles: [
+                            cloneCellStyle(style),
+                            cloneCellStyle(style),
+                            cloneCellStyle(style),
+                            cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                            cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                            cloneCellStyle(style, { type: TYPE_NUMERIC, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                        ]
+                    })
+                }
+                controller.close()
+                return
             }
-        })
-    }
-})
+            const values = [
+                crypto.randomUUID(),
+                `192.168.37.${Math.floor(Math.random() * 200) + 10}`,
+                status.at(Math.floor(Math.random() * status.length)),
+                Math.floor(Math.random() * 5000000),
+                Math.floor(Math.random() * 200000),
+                Math.floor(Math.random() * 20),
+            ]
+            totals[0] += /** @type {number} */ (values[3])
+            totals[1] += /** @type {number} */ (values[4])
+            totals[2] += /** @type {number} */ (values[5])
+            controller.enqueue({
+                values,
+                styles: [
+                    cloneCellStyle(style),
+                    cloneCellStyle(style),
+                    cloneCellStyle(style),
+                    cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                    cloneCellStyle(style, { type: TYPE_NUMERIC, formatCode: '#,##0.000', alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                    cloneCellStyle(style, { type: TYPE_NUMERIC, alignment: { horizontal: HORIZONTAL_ALIGNMENT_RIGHT } }),
+                ]
+            })
+            numRows --
+        },
+        cancel() {
+            isCanceled = true
+        }
+    })
+}
+
+streamToExcel(createExampleStream(), { author: 'Example', frozenPosition: { x: 0, y: 2 } })
+    .then(async (blob) => {
+        writeFileSync('./Пример выгрузки.xlsx', Buffer.from(await blob.arrayBuffer()))
+    })
+    .catch(error => {
+        console.error(error)
+        globalThis.process.exit(1)
+    })
 ```

@@ -1,6 +1,5 @@
 export * from './constants.js'
-export { createSourceFromTableElement } from './createSourceFromTableElement.js'
 export { getColumnNameByIndex } from './getColumnNameByIndex.js'
-export { exportToExcel } from './exportToExcel.js'
+export { streamToExcel } from './streamToExcel.js'
 export { createCellStyle } from './createCellStyle.js'
 export { cloneCellStyle } from './cloneCellStyle.js'

@@ -154,17 +154,133 @@ button.export {
 
 <script type="module">
 
-import { exportToExcel, createSourceFromTableElement } from '../dist/xlexp.min.js'
+import {
+    streamToExcel,
+    createCellStyle,
+    TYPE_NUMERIC,
+    TYPE_STRING,
+    FILL_PATTERN_SOLID,
+    FILL_PATTERN_NONE
+ } from '../dist/stream-to-excel.min.js'
 import passIt from 'https://unpkg.com/pass-it/src/index.js'
+
+function createSourceFromTableElement(tableElement, options = {}) {
+
+    const { skipEmptyRows = true, author = '' } = options
+
+    const sourceRows = [
+        ...Array.from([ tableElement ], (rowElement) => ({ rowElement, cellsSelector: 'caption', skipEmptyRows: true, doComputeExtremes: false, isHeader: true })),
+        ...Array.from(tableElement.querySelectorAll('thead > tr'), (rowElement) => ({ rowElement, cellsSelector: 'th, td', skipEmptyRows, doComputeExtremes: true, isHeader: true })),
+        ...Array.from(tableElement.querySelectorAll('tbody > tr'), (rowElement) => ({ rowElement, cellsSelector: 'td', skipEmptyRows, doComputeExtremes: true, isHeader: false })),
+        ...Array.from(tableElement.querySelectorAll('tfoot > tr'), (rowElement) => ({ rowElement, cellsSelector: 'td', skipEmptyRows, doComputeExtremes: true, isHeader: false })),
+    ]
+
+    const numFixedRows = sourceRows.reduce((result, { isHeader }) => isHeader ? result + 1 : result, 0)
+    const frozenPosition = { x: 0, y: numFixedRows }
+
+    /**
+     * @param {string|undefined} x 
+     * @returns {boolean}
+     */
+    const toBoolOrUndefined = x => x === undefined ? undefined : /^(true|yes|on|1)$/i.test(x)
+
+    const getReadableStream = () => {
+        let rowIndex = 0
+        let isCanceled = false
+        return new ReadableStream({
+            async pull(controller) {
+                if (isCanceled) {
+                    controller.close()
+                    return
+                }
+                for (;;) {
+                    if (rowIndex >= sourceRows.length) {
+                        controller.close()
+                        return
+                    }
+                    const { rowElement, cellsSelector, skipEmptyRows, doComputeExtremes } = sourceRows[rowIndex ++]
+                    const values = []
+                    const styles = []
+                    const cells = rowElement.querySelectorAll(cellsSelector)
+                    for (let i = 0; i < cells.length; i ++) {
+                        const cellElement = /** @type {HTMLElement} */ (cells[i])
+                        const opts = cellElement.dataset
+                        const isHidden = opts.xlHidden || false
+                        if (isHidden) continue
+                        const cellStyle = createCellStyle({
+                            type: (/^(numeric|number|num|n)$/i.test(opts.xlType)
+                                ? TYPE_NUMERIC
+                                : TYPE_STRING),
+                            formatCode: opts.xlFmt,
+                            font: {
+                                name: opts.xlFont,
+                                size: opts.xlFontSize ? Number(opts.xlFontSize) : undefined,
+                                color: opts.xlColor,
+                                bold: toBoolOrUndefined(opts.xlBold),
+                                italic: toBoolOrUndefined(opts.xlItalic),
+                                underline: toBoolOrUndefined(opts.xlUnderline),
+                                strikethrough: toBoolOrUndefined(opts.xlStrikethrough),
+                            },
+                            alignment: {
+                                horizontal: opts.xlHalign,
+                                vertical: opts.xlValign,
+                                wrapText: toBoolOrUndefined(opts.xlWrap),
+                            },
+                            borderLeft: {
+                                thickness: opts.xlBorderLeft || opts.xlBorder,
+                            },
+                            borderRight: {
+                                thickness: opts.xlBorderLeft || opts.xlBorder,
+                            },
+                            borderBottom: {
+                                thickness: opts.xlBorderLeft || opts.xlBorder,
+                            },
+                            borderTop: {
+                                thickness: opts.xlBorderLeft || opts.xlBorder,
+                            },
+                            borderDiagonal: {
+                                thickness: opts.xlBorderDiagonal,
+                                up: true,
+                                down: true,
+                            },
+                            fill: {
+                                pattern: opts.xlBackgroundColor
+                                    ? FILL_PATTERN_SOLID
+                                    : FILL_PATTERN_NONE,
+                                bgColor: opts.xlBackgroundColor,
+                            }
+                        })
+                        styles.push(cellStyle)
+                        values.push(cellElement.innerText)
+                    }
+                    if (skipEmptyRows && values.length <= 0)
+                        continue
+                    controller.enqueue({ values, styles, doComputeExtremes })
+                    break
+                }
+            },
+            cancel() {
+                isCanceled = true
+            }
+        })
+    }
+
+    return {
+        stream: getReadableStream(),
+        options: {
+            author,
+            frozenPosition
+        }
+    }
+}
 
 const tableElement = document.querySelector('table')
 const buttonElement = document.querySelector('button.export')
 
 buttonElement.addEventListener('click', async () => {
     buttonElement.setAttribute('disabled', true)
-    const blob = await exportToExcel(
-        createSourceFromTableElement(tableElement)
-    )
+    const { stream, options } = createSourceFromTableElement(tableElement)
+    const blob = await streamToExcel(stream, options)
     passIt(blob, { download: "Пример выгрузки.xlsx" })
     buttonElement.removeAttribute('disabled')
 })
