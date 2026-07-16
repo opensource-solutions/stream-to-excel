@@ -116,3 +116,5 @@ export declare function createCellStyle(options: CellStyleOptions = {}): CellSty
 export declare function cloneCellStyle(cellStyle: CellStyle, options: CellStyleOptions = {}): CellStyle;
 export declare function getColumnNameByIndex(n: number): string;
 export declare function streamToExcel(stream: ReadableStream<Row>, options?: SheetOptions): Promise<Blob>;
+
+export * from '../src/constants.js'
