@@ -184,6 +184,12 @@ function createSourceFromTableElement(tableElement, options = {}) {
      */
     const toBoolOrUndefined = x => x === undefined ? undefined : /^(true|yes|on|1)$/i.test(x)
 
+    /**
+     * @param {string|undefined} x
+     * @returns {string|number|undefined}
+     */
+    const parseColor = x => x === undefined ? undefined : (x.startsWith('#') ? x.substring(1).toUpperCase() : parseInt(x))
+
     const getReadableStream = () => {
         let rowIndex = 0
         let isCanceled = false
@@ -215,7 +221,7 @@ function createSourceFromTableElement(tableElement, options = {}) {
                             font: {
                                 name: opts.xlFont,
                                 size: opts.xlFontSize ? Number(opts.xlFontSize) : undefined,
-                                color: opts.xlColor,
+                                color: parseColor(opts.xlColor),
                                 bold: toBoolOrUndefined(opts.xlBold),
                                 italic: toBoolOrUndefined(opts.xlItalic),
                                 underline: toBoolOrUndefined(opts.xlUnderline),
@@ -228,26 +234,51 @@ function createSourceFromTableElement(tableElement, options = {}) {
                             },
                             borderLeft: {
                                 thickness: opts.xlBorderLeft || opts.xlBorder,
+                                color: parseColor(
+                                    opts.xlBorderLeftColor !== undefined
+                                        ? opts.xlBorderLeftColor
+                                        : opts.xlBorderColor
+                                    )
                             },
                             borderRight: {
-                                thickness: opts.xlBorderLeft || opts.xlBorder,
+                                thickness: opts.xlBorderRight || opts.xlBorder,
+                                color: parseColor(
+                                    opts.xlBorderRightColor !== undefined
+                                        ? opts.xlBorderRightColor
+                                        : opts.xlBorderColor
+                                    )
                             },
                             borderBottom: {
-                                thickness: opts.xlBorderLeft || opts.xlBorder,
+                                thickness: opts.xlBorderBottom || opts.xlBorder,
+                                color: parseColor(
+                                    opts.xlBorderBottomColor !== undefined
+                                        ? opts.xlBorderBottomColor
+                                        : opts.xlBorderColor
+                                    )
                             },
                             borderTop: {
-                                thickness: opts.xlBorderLeft || opts.xlBorder,
+                                thickness: opts.xlBorderTop || opts.xlBorder,
+                                color: parseColor(
+                                    opts.xlBorderTopColor !== undefined
+                                        ? opts.xlBorderTopColor
+                                        : opts.xlBorderColor
+                                    )
                             },
                             borderDiagonal: {
                                 thickness: opts.xlBorderDiagonal,
                                 up: true,
                                 down: true,
+                                color: parseColor(
+                                    opts.xlBorderDiagonalColor !== undefined
+                                        ? opts.xlBorderDiagonalColor
+                                        : opts.xlBorderColor
+                                    )
                             },
                             fill: {
-                                pattern: opts.xlBackgroundColor
+                                pattern: opts.xlBackgroundColor !== undefined
                                     ? FILL_PATTERN_SOLID
                                     : FILL_PATTERN_NONE,
-                                bgColor: opts.xlBackgroundColor,
+                                bgColor: parseColor(opts.xlBackgroundColor),
                             }
                         })
                         styles.push(cellStyle)
