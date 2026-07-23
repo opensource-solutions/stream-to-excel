@@ -73,7 +73,7 @@ const createExampleStream = () => {
             }
             const values = [
                 crypto.randomUUID(),
-                `192.168.37.${Math.floor(Math.random() * 200) + 10}`,
+                `192.168.20.${Math.floor(Math.random() * 200) + 10}`,
                 status.at(Math.floor(Math.random() * status.length)),
                 Math.floor(Math.random() * 5000000),
                 Math.floor(Math.random() * 200000),
