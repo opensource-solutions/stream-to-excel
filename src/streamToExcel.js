@@ -721,7 +721,11 @@ export async function streamToExcel(stream, options = {}) { // TODO use streams 
         ${ item.font.underline ? `<u val="single" />` : ``}
         ${ item.font.strikethrough ? `<strike val="true" />` : ``}
         <sz val="${ item.font.size }" />
-        ${ item.font.color === constants.COLOR_DEFAULT ? '' : `<color rgb="${item.font.color}"/>` }
+        ${ item.font.color === constants.COLOR_DEFAULT
+            ? ''
+            : `<color ${typeof item.font.color === 'number'
+                ? `indexed="${item.font.color}"`
+                : `rgb="${item.font.color}"`}/>` }
         <name val="${ item.font.name }" />
         <family val="2" />
         <charset val="204" />
@@ -733,8 +737,16 @@ export async function streamToExcel(stream, options = {}) { // TODO use streams 
     ${ fills.map(item => `
       <fill>
         <patternFill patternType="${ item.fill.pattern }">
-          ${ item.fill.pattern === constants.FILL_PATTERN_SOLID && item.fill.bgColor !== constants.COLOR_DEFAULT ? `<fgColor rgb="${ item.fill.bgColor }"/>` : ``}
-          ${ item.fill.pattern === constants.FILL_PATTERN_SOLID && item.fill.bgColor !== constants.COLOR_DEFAULT ? `<bgColor rgb="${ item.fill.bgColor }"/>` : ``}
+          ${ item.fill.pattern === constants.FILL_PATTERN_SOLID && item.fill.bgColor !== constants.COLOR_DEFAULT
+            ? `<fgColor ${ typeof item.fill.bgColor === 'number'
+              ? `indexed="${item.fill.bgColor}"`
+              : `rgb="${item.fill.bgColor}"`}/>`
+            : ``}
+          ${ item.fill.pattern === constants.FILL_PATTERN_SOLID && item.fill.bgColor !== constants.COLOR_DEFAULT
+            ? `<bgColor ${ typeof item.fill.bgColor === 'number'
+              ? `indexed="${item.fill.bgColor}"`
+              : `rgb="${item.fill.bgColor}"`}/>`
+            : ``}
         </patternFill>
       </fill>
     `).join('\n') }
@@ -746,19 +758,29 @@ export async function streamToExcel(stream, options = {}) { // TODO use streams 
           : ``
         }>
           <left${ item.borderLeft.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderLeft.thickness }"` : `` }>
-             ${ item.borderLeft.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderLeft.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderLeft.color }"/>` : ``) : `` }
+             ${ item.borderLeft.thickness !== constants.BORDER_THICKNESS_NONE && item.borderLeft.color !== constants.COLOR_DEFAULT
+                ? `<color ${ typeof item.borderLeft.color === 'number' ? `indexed="${item.borderLeft.color}"` : `rgb="${item.borderLeft.color}"` }/>`
+                : `` }
           </left>
           <right${ item.borderRight.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderRight.thickness }"` : `` }>
-             ${ item.borderRight.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderRight.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderRight.color }"/>` : ``) : `` }
+             ${ item.borderRight.thickness !== constants.BORDER_THICKNESS_NONE && item.borderRight.color !== constants.COLOR_DEFAULT
+                ? `<color ${ typeof item.borderRight.color === 'number' ? `indexed="${item.borderRight.color}"` : `rgb="${item.borderRight.color}"` }/>`
+                : `` }
           </right>
           <top${ item.borderTop.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderTop.thickness }"` : `` }>
-             ${ item.borderTop.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderTop.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderTop.color }"/>` : ``) : `` }
+             ${ item.borderTop.thickness !== constants.BORDER_THICKNESS_NONE && item.borderTop.color !== constants.COLOR_DEFAULT
+                ? `<color ${ typeof item.borderTop.color === 'number' ? `indexed="${item.borderTop.color}"` : `rgb="${item.borderTop.color}"` }/>`
+                : `` }
           </top>
           <bottom${ item.borderBottom.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderBottom.thickness }"` : `` }>
-             ${ item.borderBottom.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderBottom.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderBottom.color }"/>` : ``) : `` }
+             ${ item.borderBottom.thickness !== constants.BORDER_THICKNESS_NONE && item.borderBottom.color !== constants.COLOR_DEFAULT
+                ? `<color ${ typeof item.borderBottom.color === 'number' ? `indexed="${item.borderBottom.color}"` : `rgb="${item.borderBottom.color}"` }/>`
+                : `` }
           </bottom>
           <diagonal${ item.borderDiagonal.thickness !== constants.BORDER_THICKNESS_NONE ? ` style="${ item.borderDiagonal.thickness }"` : `` }>
-             ${ item.borderDiagonal.thickness !== constants.BORDER_THICKNESS_NONE ? (item.borderDiagonal.color !== constants.COLOR_DEFAULT ? `<color indexed="${ item.borderDiagonal.color }"/>` : ``) : `` }
+             ${ item.borderDiagonal.thickness !== constants.BORDER_THICKNESS_NONE && item.borderDiagonal.color !== constants.COLOR_DEFAULT
+                ? `<color ${ typeof item.borderDiagonal.color === 'number' ? `indexed="${item.borderDiagonal.color}"` : `rgb="${item.borderDiagonal.color}"` }/>`
+                : `` }
           </diagonal>
        </border>
     `).join('\n') }
