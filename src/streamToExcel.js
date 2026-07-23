@@ -721,7 +721,7 @@ export async function streamToExcel(stream, options = {}) { // TODO use streams 
         ${ item.font.underline ? `<u val="single" />` : ``}
         ${ item.font.strikethrough ? `<strike val="true" />` : ``}
         <sz val="${ item.font.size }" />
-        <color ${ item.font.color === constants.COLOR_DEFAULT ? `theme="1"` : `rgb="${item.font.color}"` } />
+        ${ item.font.color === constants.COLOR_DEFAULT ? '' : `<color rgb="${item.font.color}"/>` }
         <name val="${ item.font.name }" />
         <family val="2" />
         <charset val="204" />
